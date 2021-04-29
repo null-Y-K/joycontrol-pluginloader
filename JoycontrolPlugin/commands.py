@@ -38,19 +38,19 @@ class JoycontrolCommands:
             power = 0
         elif direction == 'left':
             angle = 0
-        elif direction == 'left-up':
+        elif direction == 'up-left':
             angle = 45
         elif direction == 'up':
             angle = 90
-        elif direction == 'right-up':
+        elif direction == 'up-right':
             angle = 135
         elif direction == 'right':
             angle = 180
-        elif direction == 'right-down':
+        elif direction == 'down-right':
             angle = 215
         elif direction == 'down':
             angle = 270
-        elif direction == 'left-down':
+        elif direction == 'down-left':
             angle = 315
 
         if angle is None:
