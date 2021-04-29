@@ -14,7 +14,7 @@ class JoycontrolCommands:
         self.cli = ControllerCLI(controller_state)
         self.controller_state = controller_state
         self.__max_stick_power = MAX_STICK_POWER
-    
+
     @property
     def max_stick_power(self):
         return self.__max_stick_power
@@ -44,7 +44,7 @@ class JoycontrolCommands:
             angle = 180
         elif direction == 'down':
             angle = 270
-        
+
         if angle is None:
             raise ValueError('Missing angle')
 
@@ -62,7 +62,7 @@ class JoycontrolCommands:
     async def button_press(self, *buttons):
         logger.debug('Press {}'.format(', '.join(buttons)))
         await button_press(self.controller_state, *buttons)
-    
+
     async def button_release(self, *buttons):
         logger.debug('Release {}'.format(', '.join(buttons)))
         await button_release(self.controller_state, *buttons)
