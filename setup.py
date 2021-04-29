@@ -13,7 +13,7 @@ setup(
     description='PluginLoader for mart1nro/joycontrol',
     packages=find_packages(),
     install_requires=[
-        'hid', 'aioconsole', 'dbus-python', 'crc8'
+        'hid', 'aioconsole', 'dbus-python', 'crc8', 'pygame',
     ],
     entry_points={
         'console_scripts': [
