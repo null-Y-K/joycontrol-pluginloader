@@ -48,48 +48,48 @@ class DualShock4HatSwitch(IntEnum):
 
 class DualShock4StickDefinition(Enum):
     CENTER = {
-        'axis1_range' : (-0.10, 0.10),
-        'axis2_range' : (-0.10, 0.10)
+        'axis1_range' : (-0.20, 0.20),
+        'axis2_range' : (-0.20, 0.20)
     }
 
     UP = {
-        'axis1_range' : (-1.00, -0.10),
+        'axis1_range' : (-1.00, -0.20),
         'axis2_range' : (-0.40, 0.40)
     }
 
     UP_LEFT = {
         'axis1_range' : (-1.00, -0.41),
-        'axis2_range' : (-1.00, -0.10)
+        'axis2_range' : (-1.00, -0.20)
     }
 
     LEFT = {
         'axis1_range' : (-0.40, 0.40),
-        'axis2_range' : (-1.00, -0.10)
+        'axis2_range' : (-1.00, -0.20)
     }
 
     DOWN_LEFT = {
         'axis1_range' : (0.41, 1.00),
-        'axis2_range' : (-1.00, -0.10)
+        'axis2_range' : (-1.00, -0.20)
     }
 
     DOWN = {
-        'axis1_range' : (0.10, 1.00),
+        'axis1_range' : (0.20, 1.00),
         'axis2_range' : (-0.40, 0.40)
     }
 
     DOWN_RIGHT = {
         'axis1_range' : (0.41, 1.00),
-        'axis2_range' : (0.10, 1.00)
+        'axis2_range' : (0.20, 1.00)
     }
 
     RIGHT = {
         'axis1_range' : (-0.40, 0.40),
-        'axis2_range' : (0.10, 1.00)
+        'axis2_range' : (0.20, 1.00)
     }
 
     UP_RIGHT = {
         'axis1_range' : (-1.00, -0.41),
-        'axis2_range' : (0.10, 1.00)
+        'axis2_range' : (0.20, 1.00)
     }
 
 
