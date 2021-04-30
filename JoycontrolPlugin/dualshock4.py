@@ -1,11 +1,17 @@
-
-from abc import abstractmethod
 from enum import Enum, IntEnum
-import enum
+import os
+import json
 import logging
 
 import pygame
+import asyncio
+from joycontrol import logging_default as log, utils
+from joycontrol.controller import Controller
+from joycontrol.memory import FlashMemory
+from joycontrol.protocol import controller_protocol_factory
+from joycontrol.server import create_hid_server
 from JoycontrolPlugin.commands import JoycontrolCommands
+
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +164,8 @@ class JoycontrolDualShock4(JoycontrolCommands):
         pygame.init()
         pygame.display.set_mode((320, 320))
 
+        self.command_list = []
+
     def is_quit(self, event):
         return (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE) or event.type == pygame.QUIT
 
@@ -277,11 +285,22 @@ class JoycontrolDualShock4(JoycontrolCommands):
             logger.debug(f'Button Up : {DualShock4Botton(event.button).name}')
             return SwitchButtonDefinitionForDualshock4[button_name]
 
+    def save_recording_command_to_json_file(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # json_file = f'{script_dir}/test.json'
+        json_file = f'{script_dir}/test.txt'
+        with open(json_file, 'w') as f:
+            # json_dict = json.load(f)
+            for command in self.command_list:
+                f.write(f'{command}\n')
+
+
     async def main_loop(self):
         pygame.display.set_mode((320, 320))
         # Main Loop
         old_l_stick_direction = None
         old_r_stick_direction = None
+
         while True:
             for event in pygame.event.get():
                 if self.is_quit(event):
@@ -291,79 +310,78 @@ class JoycontrolDualShock4(JoycontrolCommands):
                 if l_stick_direction and (old_l_stick_direction != l_stick_direction):
                     # print(f'L Stick Direction : {l_stick_direction.name}')
                     await self.left_stick(l_stick_direction.value)
-                    await self.wait(0.1)
                     old_l_stick_direction = l_stick_direction
+                    self.command_list.append(f'await self.left_stick(\'{l_stick_direction.value}\')')
 
                 r_stick_direction = self.get_r_stick_direction(event)
                 if r_stick_direction and (old_r_stick_direction != r_stick_direction):
                     # print(f'R Stick Direction : {r_stick_direction.name}')
                     await self.right_stick(r_stick_direction.value)
-                    await self.wait(0.1)
                     old_r_stick_direction = r_stick_direction
+                    self.command_list.append(f'await self.right_stick(\'{r_stick_direction.value}\')')
 
                 button_release = self.get_button_up(event)
                 if button_release:
                     # print(f'Button Release : {button_release.name}')
                     await self.button_release(button_release.value)
-                    await self.wait(0.1)
+                    self.command_list.append(f'await self.button_release(\'{button_release.value}\')')
 
                 button_press = self.get_button_down(event)
                 if button_press:
                     # print(f'Button Press : {button_press.name}')
                     await self.button_press(button_press.value)
-                    await self.wait(0.1)
+                    self.command_list.append(f'await self.button_press(\'{button_press.value}\')')
 
                 cross_key_direction = self.get_cross_key_direction(event)
                 if cross_key_direction:
                     if cross_key_direction == SwitchCrossKeyDefinitionForDualshock4.CENTER:
                         # print(f'Cross Key Release : {cross_key_direction.name}')
                         await self.button_release(*cross_key_direction.value)
-                        await self.wait(0.1)
+                        self.command_list.append(f'await self.button_release(*{cross_key_direction.value})')
                     else:
                         # print(f'Cross Key Press : {cross_key_direction.name}')
                         await self.button_press(*cross_key_direction.value)
-                        await self.wait(0.1)
+                        self.command_list.append(f'await self.button_press(*{cross_key_direction.value})')
+            await self.wait(0.1)
+            self.command_list.append(f'await self.wait(0.1)')
+
+async def start(reconnect_bt_addr):
+    # Create memory containing default controller stick calibration
+    spi_flash = FlashMemory()
+
+    # Get controller name to emulate from arguments
+    controller = Controller.from_arg('PRO_CONTROLLER')
+
+    with utils.get_output(path=None, default=None) as capture_file:
+        factory = controller_protocol_factory(controller, spi_flash=spi_flash)
+        ctl_psm, itr_psm = 17, 19
+        transport, protocol = await create_hid_server(factory, reconnect_bt_addr=reconnect_bt_addr,
+                                                        ctl_psm=ctl_psm,
+                                                        itr_psm=itr_psm, capture_file=capture_file,
+                                                        device_id=None)
+
+    controller_state = protocol.get_controller_state()
+    transport = transport
+    try:
+        # waits until controller is fully connected
+        await controller_state.connect()
+        dualshock = JoycontrolDualShock4(controller_state)
+        await dualshock.main_loop()
+        dualshock.save_recording_command_to_json_file()
+    except Exception as e:
+        logger.error(e)
+    finally:
+        logger.info('Stopping communication...')
+        await transport.close()
+        transport = None
+
 
 
 if __name__ == '__main__':
-    import asyncio
-    from joycontrol import logging_default as log, utils
-    from joycontrol.controller import Controller
-    from joycontrol.memory import FlashMemory
-    from joycontrol.protocol import controller_protocol_factory
-    from joycontrol.server import create_hid_server
-
-    async def start():
-        # Create memory containing default controller stick calibration
-        spi_flash = FlashMemory()
-
-        # Get controller name to emulate from arguments
-        controller = Controller.from_arg('PRO_CONTROLLER')
-
-        with utils.get_output(path=None, default=None) as capture_file:
-            factory = controller_protocol_factory(controller, spi_flash=spi_flash)
-            ctl_psm, itr_psm = 17, 19
-            transport, protocol = await create_hid_server(factory, reconnect_bt_addr='48:A5:E7:CB:A2:1E',
-                                                            ctl_psm=ctl_psm,
-                                                            itr_psm=itr_psm, capture_file=capture_file,
-                                                            device_id=None)
-
-        controller_state = protocol.get_controller_state()
-        transport = transport
-        try:
-            # waits until controller is fully connected
-            await controller_state.connect()
-            dualshock = JoycontrolDualShock4(controller_state)
-            await dualshock.main_loop()
-        except Exception as e:
-            logger.error(e)
-        finally:
-            logger.info('Stopping communication...')
-            await transport.close()
-            transport = None
+    reconnect_bt_addr = '48:A5:E7:CB:A2:1E'
 
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start())
+        loop.run_until_complete(start(reconnect_bt_addr))
     except KeyboardInterrupt:
         pass

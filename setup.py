@@ -17,7 +17,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'joycontrol-pluginloader=JoycontrolPlugin.loader:main',
+            'joycontrol-pluginloader-ex=JoycontrolPlugin.loader:main',
         ],
     },
 )
