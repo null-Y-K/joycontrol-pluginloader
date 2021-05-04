@@ -2,6 +2,7 @@ from enum import Enum, IntEnum
 import os
 import json
 import logging
+import argparse
 
 import pygame
 import asyncio
@@ -156,7 +157,7 @@ class JoycontrolDualShock4Error(Exception):
 
 
 class JoycontrolDualShock4(JoycontrolCommands):
-    def __init__(self, controller_state):
+    def __init__(self, controller_state, recording=False):
         super().__init__(controller_state)
         pygame.joystick.init()
         self.joystick = pygame.joystick.Joystick(0)
@@ -165,6 +166,8 @@ class JoycontrolDualShock4(JoycontrolCommands):
         pygame.display.set_mode((320, 320))
 
         self.command_list = []
+        self.recording_dict = {'recording_command': []}
+        self.recording = recording
 
     def is_quit(self, event):
         return (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE) or event.type == pygame.QUIT
@@ -286,66 +289,83 @@ class JoycontrolDualShock4(JoycontrolCommands):
             return SwitchButtonDefinitionForDualshock4[button_name]
 
     def save_recording_command_to_json_file(self):
+        if not self.recording:
+            return
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        # json_file = f'{script_dir}/test.json'
-        json_file = f'{script_dir}/test.txt'
+        no = 1
+        json_file = ''
+        while True:
+            json_file = f'{script_dir}/recorded_command_{no}.json'
+            if not os.path.exists(json_file):
+                break
+            no += 1
         with open(json_file, 'w') as f:
-            # json_dict = json.load(f)
-            for command in self.command_list:
-                f.write(f'{command}\n')
+            json.dump(self.recording_dict, f, indent=2, ensure_ascii=False)
+
+    def recording_commnad(self, command, type, direction, state):
+        if not self.recording:
+            return
+
+        self.recording_dict['recording_command'].append(
+            {
+                "command": command,
+                "type": type,
+                "direction": direction,
+                "state": state
+            })
 
 
     async def main_loop(self):
         pygame.display.set_mode((320, 320))
-        # Main Loop
-        old_l_stick_direction = None
-        old_r_stick_direction = None
-
+        previous_l_stick_direction = None
+        previous_r_stick_direction = None
         while True:
             for event in pygame.event.get():
                 if self.is_quit(event):
                     pygame.quit()
                     return
                 l_stick_direction = self.get_l_stick_direction(event)
-                if l_stick_direction and (old_l_stick_direction != l_stick_direction):
+                if l_stick_direction and (previous_l_stick_direction != l_stick_direction):
                     # print(f'L Stick Direction : {l_stick_direction.name}')
                     await self.left_stick(l_stick_direction.value)
-                    old_l_stick_direction = l_stick_direction
-                    self.command_list.append(f'await self.left_stick(\'{l_stick_direction.value}\')')
+                    previous_l_stick_direction = l_stick_direction
+                    self.recording_commnad('stick', 'l_stick', l_stick_direction.value, '')
 
                 r_stick_direction = self.get_r_stick_direction(event)
-                if r_stick_direction and (old_r_stick_direction != r_stick_direction):
+                if r_stick_direction and (previous_r_stick_direction != r_stick_direction):
                     # print(f'R Stick Direction : {r_stick_direction.name}')
                     await self.right_stick(r_stick_direction.value)
-                    old_r_stick_direction = r_stick_direction
-                    self.command_list.append(f'await self.right_stick(\'{r_stick_direction.value}\')')
+                    previous_r_stick_direction = r_stick_direction
+                    self.recording_commnad('stick', 'r_stick', l_stick_direction.value, '')
 
                 button_release = self.get_button_up(event)
                 if button_release:
                     # print(f'Button Release : {button_release.name}')
                     await self.button_release(button_release.value)
-                    self.command_list.append(f'await self.button_release(\'{button_release.value}\')')
+                    self.recording_commnad('button', button_release.value, 'release', '')
 
                 button_press = self.get_button_down(event)
                 if button_press:
                     # print(f'Button Press : {button_press.name}')
                     await self.button_press(button_press.value)
-                    self.command_list.append(f'await self.button_press(\'{button_press.value}\')')
+                    self.recording_commnad('button', button_press.value, 'press', '')
 
                 cross_key_direction = self.get_cross_key_direction(event)
                 if cross_key_direction:
                     if cross_key_direction == SwitchCrossKeyDefinitionForDualshock4.CENTER:
                         # print(f'Cross Key Release : {cross_key_direction.name}')
                         await self.button_release(*cross_key_direction.value)
-                        self.command_list.append(f'await self.button_release(*{cross_key_direction.value})')
+                        self.recording_commnad('button', ', '.join(cross_key_direction.value), 'release', '')
                     else:
                         # print(f'Cross Key Press : {cross_key_direction.name}')
                         await self.button_press(*cross_key_direction.value)
-                        self.command_list.append(f'await self.button_press(*{cross_key_direction.value})')
+                        self.recording_commnad('button', ', '.join(cross_key_direction.value), 'press', '')
             await self.wait(0.1)
-            self.command_list.append(f'await self.wait(0.1)')
+            self.recording_commnad('wait', '', '', '')
 
-async def start(reconnect_bt_addr):
+
+async def start(reconnect_bt_addr, recording):
     # Create memory containing default controller stick calibration
     spi_flash = FlashMemory()
 
@@ -365,7 +385,7 @@ async def start(reconnect_bt_addr):
     try:
         # waits until controller is fully connected
         await controller_state.connect()
-        dualshock = JoycontrolDualShock4(controller_state)
+        dualshock = JoycontrolDualShock4(controller_state, recording)
         await dualshock.main_loop()
         dualshock.save_recording_command_to_json_file()
     except Exception as e:
@@ -376,12 +396,16 @@ async def start(reconnect_bt_addr):
         transport = None
 
 
-
 if __name__ == '__main__':
-    reconnect_bt_addr = '48:A5:E7:CB:A2:1E'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-r', '--reconnect_bt_addr', type=str, default=None,
+                        help='The Switch console Bluetooth address, for reconnecting as an already paired controller')
+    parser.add_argument('--recording', action='store_true', help='Record commands operated on the gamepad')
+    parser.add_argument('-v', '--verbose', action='store_true')
+    args = parser.parse_args()
 
     loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(start(reconnect_bt_addr))
+        loop.run_until_complete(start(args.reconnect_bt_addr, args.recording))
     except KeyboardInterrupt:
         pass
